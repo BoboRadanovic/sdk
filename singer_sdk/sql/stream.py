@@ -207,6 +207,41 @@ class SQLStream(Stream, abc.ABC):
 
         return query
 
+    def apply_query_filters_greater_than(
+        self,
+        query: selectable.Select,
+        table: sa.Table,
+        *,
+        context: Context | None = None,
+    ) -> selectable.Select:
+        """Apply WHERE and ORDER BY clauses to the query.
+
+        By default, this method applies a replication filter to the query
+        and orders the results by the replication key, if a replication key is set.
+
+        Args:
+            query: The SQLAlchemy Select object.
+            table: The SQLAlchemy Table object.
+            context: The context object.
+
+        Returns:
+            A SQLAlchemy Select object.
+        """
+        if self.replication_key:
+            column = table.columns[self.replication_key]
+            order_by = (
+                sa.nulls_first(column.asc())
+                if self.supports_nulls_first
+                else column.asc()
+            )
+            query = query.order_by(order_by)
+
+            start_val = self.get_starting_replication_key_value(context)
+            if start_val is not None:
+                query = query.where(column > start_val)
+
+        return query
+    
     def apply_query_limit(self, query: selectable.Select) -> selectable.Select:
         """Apply LIMIT clause to the query.
 
